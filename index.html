@@ -602,61 +602,74 @@
         </div>
     </div>
 
-    <!-- Integración VAPI oficial usando @vapi-ai/web SDK via ESM -->
-    <script type="module">
-      import Vapi from 'https://esm.sh/@vapi-ai/web';
+    <!-- Integración VAPI - SDK cargado como UMD desde unpkg -->
+    <script src="https://unpkg.com/@vapi-ai/web@latest/dist/vapi.umd.js"></script>
+    <script>
+      const ASSISTANT_ID = "fc87ee20-e83f-44b2-a0f4-de7d9e319ecf";
+      const API_KEY      = "19824c02-6be2-4cac-b246-195201135083";
 
-      const assistantId = "fc87ee20-e83f-44b2-a0f4-de7d9e319ecf";
-      const apiKey = "19824c02-6be2-4cac-b246-195201135083";
-
-      // Instancia global del SDK
-      const vapi = new Vapi(apiKey);
-
-      // Estado de la llamada para manejar toggle
+      let vapi = null;
       let callActive = false;
 
-      // Escuchamos eventos del ciclo de vida de la llamada
-      vapi.on('call-start', () => {
-        callActive = true;
-        console.log('✅ Llamada con Santi iniciada.');
-        updateButtonsState(true);
+      // Inicializamos el SDK en cuanto el DOM esté listo
+      document.addEventListener('DOMContentLoaded', function () {
+        // El SDK UMD expone window.Vapi
+        if (typeof window.Vapi === 'undefined') {
+          console.error('❌ SDK de Vapi no cargado. Revisa la conexión.');
+          return;
+        }
+
+        vapi = new window.Vapi(API_KEY);
+
+        vapi.on('call-start', function () {
+          callActive = true;
+          console.log('✅ Llamada con Santi iniciada.');
+          setButtonsLabel('🔴 Finalizar llamada');
+        });
+
+        vapi.on('call-end', function () {
+          callActive = false;
+          console.log('📴 Llamada finalizada.');
+          setButtonsLabel(null); // restaura textos originales
+        });
+
+        vapi.on('error', function (err) {
+          callActive = false;
+          console.error('❌ Error Vapi:', err);
+          setButtonsLabel(null);
+          alert('No se pudo conectar con Santi. Verifica los permisos del micrófono e inténtalo de nuevo.');
+        });
+
+        console.log('✅ SDK de Vapi listo.');
       });
 
-      vapi.on('call-end', () => {
-        callActive = false;
-        console.log('📴 Llamada con Santi finalizada.');
-        updateButtonsState(false);
-      });
+      // Guarda los textos originales de los botones la primera vez
+      var originalLabels = {};
 
-      vapi.on('error', (err) => {
-        callActive = false;
-        console.error('❌ Error en Vapi:', err);
-        updateButtonsState(false);
-      });
-
-      // Actualiza el estado visual de todos los botones de llamada
-      function updateButtonsState(active) {
-        document.querySelectorAll('[data-vapi-btn]').forEach(btn => {
-          if (active) {
-            btn.innerHTML = btn.innerHTML.replace(/Hablar con Santi|Asesoría por voz|Consultar con Santi/g, 'Finalizar llamada');
+      function setButtonsLabel(label) {
+        document.querySelectorAll('[onclick="startVapiCall()"]').forEach(function (btn, i) {
+          if (!originalLabels[i]) originalLabels[i] = btn.innerHTML;
+          if (label) {
+            btn.innerHTML = label;
           } else {
-            // Recargamos la página para restaurar todos los textos fácilmente
-            // Alternativamente podrías guardar los textos originales
+            if (originalLabels[i]) btn.innerHTML = originalLabels[i];
           }
         });
       }
 
-      // Función global que invocan todos los botones (onclick="startVapiCall()")
-      window.startVapiCall = async function() {
-        try {
-          if (callActive) {
-            vapi.stop();
-          } else {
-            await vapi.start(assistantId);
-          }
-        } catch (err) {
-          console.error('❌ No se pudo iniciar la llamada:', err);
-          alert('No se pudo conectar con Santi. Verifica los permisos del micrófono e inténtalo de nuevo.');
+      // Función global vinculada a todos los botones
+      window.startVapiCall = function () {
+        if (!vapi) {
+          alert('El asistente de voz aún se está cargando. Espera un momento e inténtalo de nuevo.');
+          return;
+        }
+        if (callActive) {
+          vapi.stop();
+        } else {
+          vapi.start(ASSISTANT_ID).catch(function (err) {
+            console.error('❌ Error al iniciar:', err);
+            alert('No se pudo conectar con Santi. Verifica los permisos del micrófono.');
+          });
         }
       };
     </script>
